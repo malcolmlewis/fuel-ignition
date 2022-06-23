@@ -7,12 +7,15 @@
     Convert and Download
   </button>
 
-  <div v-if="this.loading" class="sk-folding-cube">
+  <div v-if="loading" class="sk-folding-cube">
     <div class="sk-cube1 sk-cube"></div>
     <div class="sk-cube2 sk-cube"></div>
     <div class="sk-cube4 sk-cube"></div>
     <div class="sk-cube3 sk-cube"></div>
   </div>
+
+  <!-- workaround for a vite build production bug, where the scope changes and 'this' becomes undefined -->
+  <button id="loadingToggle" hidden @click="loading = !loading"></button>
 </template>
 
 <script setup>
@@ -20,31 +23,13 @@ import { ref } from "vue";
 const props = defineProps(["ignJson"]);
 var loading = ref(false);
 
-String.prototype.replaceAt = function (index, replacement) {
-  return (
-    this.substring(0, index) +
-    replacement +
-    this.substring(index + replacement.length)
-  );
-};
-
-function bufferToHex(buffer) {
-  return [...new Uint8Array(buffer)]
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function strToHex(str) {
-  var result = "";
-  for (var i = 0; i < str.length; i++) {
-    result += str.charCodeAt(i).toString(16);
-  }
-  return result;
+function toggleLoading() {
+  // hacky workaround to access ref from three closures deep, which works on the dev server but not in a production build for some reason
+  document.querySelector("#loadingToggle").click();
 }
 
 let convertAndDownload = async function () {
-  this.loading = true;
-  console.log("loading: " + this.loading);
+  toggleLoading();
 
   let hexJson = strToHex(JSON.stringify(props.ignJson));
   let jsonByteSize = JSON.stringify(props.ignJson).length;
@@ -55,11 +40,12 @@ let convertAndDownload = async function () {
 
   let hexJsonByteSize = jsonByteSize.toString(16);
 
+  // pad size with a 0 if it's not even, so we can split in the middle
   if (hexJsonByteSize.length % 2 !== 0) {
     hexJsonByteSize = "0" + hexJsonByteSize;
   }
 
-  // change to little endian
+  // change size to little endian
 
   if (jsonByteSize > 255) {
     console.log(hexJsonByteSize);
@@ -71,7 +57,7 @@ let convertAndDownload = async function () {
 
   console.log(hexJsonByteSize);
 
-  let file = await fetch("src/assets/template/ignition-new.img").then(
+  let file = await fetch("templates/ignition-base-template.img").then(
     (response) => response.blob()
   );
 
@@ -89,8 +75,8 @@ let convertAndDownload = async function () {
   console.log(hex.slice(decimalOffset, decimalOffset + 4));
 
   let cleanedHex = hex
-    .replace("6c6f72656d697073756d", hexJson)
-    .replaceAt(decimalOffset, hexJsonByteSize); // replace 'loremipsum' with 'helloworld', same length
+    .replace("6c6f72656d697073756d", hexJson) // replace 'loremipsum' with our generated content
+    .replaceAt(decimalOffset, hexJsonByteSize); // set file size in bytes at offset so the filesystem is not corrupt
 
   console.log(cleanedHex.slice(decimalOffset, decimalOffset + 4));
 
@@ -114,8 +100,6 @@ let convertAndDownload = async function () {
     binary[i] = parseInt(h, 16);
   }
 
-  this.loading = false;
-
   var byteArray = new Uint8Array(binary);
   var a = window.document.createElement("a");
 
@@ -133,7 +117,31 @@ let convertAndDownload = async function () {
 
   // Remove anchor from body
   document.body.removeChild(a);
+
+  toggleLoading();
 };
+
+String.prototype.replaceAt = function (index, replacement) {
+  return (
+    this.substring(0, index) +
+    replacement +
+    this.substring(index + replacement.length)
+  );
+};
+
+function bufferToHex(buffer) {
+  return [...new Uint8Array(buffer)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function strToHex(str) {
+  var result = "";
+  for (var i = 0; i < str.length; i++) {
+    result += str.charCodeAt(i).toString(16);
+  }
+  return result;
+}
 
 let alphabet = [
   "Alfa",
